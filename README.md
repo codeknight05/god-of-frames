@@ -19,6 +19,7 @@ It is designed as a practical alternative to traditional monitoring tools: alway
 - Learning loop that scores past actions and prioritizes what worked.
 - Built-in local control web UI (`http://127.0.0.1:5055`) to change runtime settings.
 - Feedback tab with optional relay endpoint for cross-user product feedback.
+- Optional update-manifest URL setting for future auto-update checks.
 - In-game style overlay with hotkey cycle:
   - full overlay
   - mini FPS corner
@@ -80,7 +81,7 @@ README.md
 - Visual Studio Build Tools 2022 (MSVC C++)
 - PresentMon available on system PATH (or installed via WinGet fallback path)
 - Optional: Gemini API key (`GEMINI_API_KEY`) for AI-assisted suggestions
-- Optional: Python 3 only for running `scripts/feedback_hub.py`
+- Optional: Python 3 for running `scripts/feedback_hub.py` and `scripts/update_hub.py`
 
 ## Build From Source
 
@@ -184,6 +185,7 @@ Fields:
 - `auto_elevate`
 - `open_ui_on_start`
 - `feedback_endpoint`
+- `update_manifest_url`
 - `game_processes` (semicolon list)
 - `trim_targets` (semicolon list)
 - `protected_apps` (semicolon list)
@@ -227,9 +229,12 @@ Includes:
 - `install_startup.bat`
 - `remove_startup.bat`
 - `run_feedback_hub.bat`
+- `run_update_hub.bat`
 - `settings.conf`
 - `README_USER.txt`
 - `feedback_hub.py`
+- `update_hub.py`
+- `update_manifest.json`
 
 ## Feedback Relay (Owner Side)
 
@@ -257,6 +262,38 @@ Notes:
 
 - `run_feedback_hub.bat` includes Python auto-detection fallbacks.
 - Relay requires Python 3 on the host.
+- Optional relay security:
+  - set `FEEDBACK_HUB_INGEST_TOKEN` on server
+  - clients can use endpoint `http://YOUR_SERVER:8787/api/ingest?token=YOUR_TOKEN`
+  - set `FEEDBACK_HUB_VIEW_TOKEN` to protect dashboard/API viewing
+
+## Optional Update Manifest Server
+
+Use this if you want a central version endpoint for future client update checks.
+
+1. Run update hub:
+
+```powershell
+python scripts/update_hub.py
+```
+
+2. Edit manifest file:
+
+```text
+data/update_manifest.json
+```
+
+3. Point clients to:
+
+```text
+http://YOUR_SERVER:8790/api/version
+```
+
+You can persist this in app settings as `update_manifest_url`.
+Optional security:
+
+- `UPDATE_HUB_VIEW_TOKEN` to protect GET endpoints
+- `UPDATE_HUB_ADMIN_TOKEN` to protect `POST /api/version`
 
 ## Troubleshooting
 
@@ -281,6 +318,7 @@ Notes:
 - Confirm `feedback_endpoint` URL is reachable from client machine.
 - Confirm hub is running and port `8787` is open.
 - Verify client post result returns `"forwarded": true`.
+- If ingest token is enabled, include `?token=...` in `feedback_endpoint`.
 
 ## Safety Notes
 

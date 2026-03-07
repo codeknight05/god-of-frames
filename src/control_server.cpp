@@ -385,7 +385,8 @@ std::string ControlServer::BuildStateJson() const {
     oss << "\"protectedApps\":\"" << EscapeJson(JoinList(s.protectedApps)) << "\",";
     oss << "\"trimTargets\":\"" << EscapeJson(JoinList(s.trimTargets)) << "\",";
     oss << "\"gameProcesses\":\"" << EscapeJson(JoinList(s.gameProcesses)) << "\",";
-    oss << "\"feedbackEndpoint\":\"" << EscapeJson(s.feedbackEndpoint) << "\"";
+    oss << "\"feedbackEndpoint\":\"" << EscapeJson(s.feedbackEndpoint) << "\",";
+    oss << "\"updateManifestUrl\":\"" << EscapeJson(s.updateManifestUrl) << "\"";
     oss << "}";
     return oss.str();
 }
@@ -501,6 +502,9 @@ std::string ControlServer::BuildHtml() const {
       <label>Feedback Relay Endpoint (optional, cross-user feedback sync)</label>
       <input id="feedbackEndpoint" placeholder="https://your-server.example.com/api/ingest" />
 
+      <label>Update Manifest URL (optional, future auto-update checks)</label>
+      <input id="updateManifestUrl" placeholder="https://your-server.example.com/api/version" />
+
       <button class="btn" onclick="saveSettings()">Save Settings</button>
       <div id="saveStatus" class="sub"></div>
     </div>
@@ -570,10 +574,13 @@ std::string ControlServer::BuildHtml() const {
         if(!document.getElementById('feedbackEndpoint').dataset.touched){
           document.getElementById('feedbackEndpoint').value = s.feedbackEndpoint || '';
         }
+        if(!document.getElementById('updateManifestUrl').dataset.touched){
+          document.getElementById('updateManifestUrl').value = s.updateManifestUrl || '';
+        }
       }catch(e){}
     }
 
-    for(const id of ['protectedApps','trimTargets','gameProcesses','feedbackEndpoint']){
+    for(const id of ['protectedApps','trimTargets','gameProcesses','feedbackEndpoint','updateManifestUrl']){
       document.getElementById(id).addEventListener('input', ()=>{ document.getElementById(id).dataset.touched='1'; });
     }
 
@@ -583,6 +590,7 @@ std::string ControlServer::BuildHtml() const {
       body.set('trim_targets', document.getElementById('trimTargets').value);
       body.set('game_processes', document.getElementById('gameProcesses').value);
       body.set('feedback_endpoint', document.getElementById('feedbackEndpoint').value);
+      body.set('update_manifest_url', document.getElementById('updateManifestUrl').value);
 
       const status = document.getElementById('saveStatus');
       status.textContent = 'Saving...';
@@ -592,7 +600,7 @@ std::string ControlServer::BuildHtml() const {
         if(r.ok){
           status.textContent = 'Saved. Applied to running session.';
           status.className = 'ok';
-          for(const id of ['protectedApps','trimTargets','gameProcesses','feedbackEndpoint']){
+          for(const id of ['protectedApps','trimTargets','gameProcesses','feedbackEndpoint','updateManifestUrl']){
             delete document.getElementById(id).dataset.touched;
           }
           refreshState();
@@ -754,6 +762,8 @@ bool ControlServer::HandleClient(uintptr_t clientSocket) {
                 patch.gameProcesses = ParseList(val);
             } else if (key == "feedback_endpoint") {
                 patch.feedbackEndpoint = Trim(val);
+            } else if (key == "update_manifest_url") {
+                patch.updateManifestUrl = Trim(val);
             }
         }
 

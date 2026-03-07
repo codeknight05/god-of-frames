@@ -1,0 +1,15 @@
+{
+  "app": "god_of_frames",
+  "channel": "stable",
+  "latest_version": "1.0.0",
+  "min_supported_version": "1.0.0",
+  "published_at_utc": "2026-03-08T00:00:00Z",
+  "download_url": "https://github.com/codeknight05/god-of-frames/releases/download/v1.0.0/GodOfFrames-v1.0.0-win64.zip",
+  "sha256": "",
+  "release_notes_url": "https://github.com/codeknight05/god-of-frames/releases/tag/v1.0.0",
+  "notes": [
+    "Set sha256 after publishing your release artifact.",
+    "Increment latest_version whenever you ship a new release."
+  ],
+  "force_update": false
+}

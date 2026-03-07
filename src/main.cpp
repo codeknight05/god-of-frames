@@ -491,6 +491,7 @@ int main(int argc, char** argv) {
                 settings.trimTargets = pendingPatch.trimTargets;
                 settings.gameProcesses = pendingPatch.gameProcesses;
                 settings.feedbackEndpoint = pendingPatch.feedbackEndpoint;
+                settings.updateManifestUrl = pendingPatch.updateManifestUrl;
 
                 settingsStore.Save(settings);
                 remediator.SetTrimPolicy(settings.trimTargets, settings.protectedApps);

@@ -9,6 +9,7 @@ struct AppSettings {
     bool autoElevate = true;
     bool openUiOnStart = true;
     std::string feedbackEndpoint;
+    std::string updateManifestUrl;
     std::vector<std::string> gameProcesses = {
         "helldivers2.exe",
         "forhonor.exe"

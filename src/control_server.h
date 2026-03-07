@@ -15,6 +15,7 @@ struct SettingsPatch {
     std::vector<std::string> trimTargets;
     std::vector<std::string> gameProcesses;
     std::string feedbackEndpoint;
+    std::string updateManifestUrl;
 };
 
 struct WebUiState {

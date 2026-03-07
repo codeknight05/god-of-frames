@@ -55,6 +55,7 @@ bool SettingsStore::Save(const AppSettings& settings) const {
     out << "auto_elevate=" << (settings.autoElevate ? "true" : "false") << "\n";
     out << "open_ui_on_start=" << (settings.openUiOnStart ? "true" : "false") << "\n";
     out << "feedback_endpoint=" << settings.feedbackEndpoint << "\n";
+    out << "update_manifest_url=" << settings.updateManifestUrl << "\n";
     out << "game_processes=" << JoinList(settings.gameProcesses) << "\n";
     out << "trim_targets=" << JoinList(settings.trimTargets) << "\n";
     out << "protected_apps=" << JoinList(settings.protectedApps) << "\n";
@@ -94,6 +95,8 @@ AppSettings SettingsStore::LoadOrCreateDefault() const {
             settings.openUiOnStart = (v == "true" || v == "1" || v == "yes");
         } else if (key == "feedback_endpoint") {
             settings.feedbackEndpoint = value;
+        } else if (key == "update_manifest_url") {
+            settings.updateManifestUrl = value;
         } else if (key == "game_processes") {
             auto parsed = ParseList(value);
             if (!parsed.empty()) settings.gameProcesses = std::move(parsed);
@@ -108,4 +111,3 @@ AppSettings SettingsStore::LoadOrCreateDefault() const {
     Save(settings);
     return settings;
 }
-
