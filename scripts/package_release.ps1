@@ -5,10 +5,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "[1/4] Configuring..."
+Write-Host "[1/5] Configuring..."
 cmake -S . -B $BuildDir -G "Visual Studio 17 2022" -A x64
 
-Write-Host "[2/4] Building..."
+Write-Host "[2/5] Building..."
 cmake --build $BuildDir --config $Config
 
 $dist = Join-Path (Get-Location) "dist\GodOfFrames"
@@ -17,17 +17,10 @@ if (Test-Path $dist) {
 }
 New-Item -ItemType Directory -Path $dist | Out-Null
 
-Write-Host "[3/4] Copying artifacts..."
+Write-Host "[3/5] Copying user artifacts..."
 Copy-Item "$BuildDir\$Config\god_of_frames.exe" "$dist\god_of_frames.exe"
-Copy-Item "README.md" "$dist\README.md"
 if (Test-Path "settings.example.conf") {
     Copy-Item "settings.example.conf" "$dist\settings.conf"
-}
-if (Test-Path "scripts\feedback_hub.py") {
-    Copy-Item "scripts\feedback_hub.py" "$dist\feedback_hub.py"
-}
-if (Test-Path "scripts\update_hub.py") {
-    Copy-Item "scripts\update_hub.py" "$dist\update_hub.py"
 }
 if (Test-Path "scripts\update_manifest.example.json") {
     Copy-Item "scripts\update_manifest.example.json" "$dist\update_manifest.json"
@@ -36,14 +29,8 @@ if (Test-Path "scripts\update_manifest.example.json") {
 @"
 @echo off
 cd /d %~dp0
-god_of_frames.exe --watch-games --open-ui
-"@ | Set-Content -Encoding ASCII "$dist\run_watch_games.bat"
-
-@"
-@echo off
-cd /d %~dp0
 start "" god_of_frames.exe --watch-games --open-ui
-"@ | Set-Content -Encoding ASCII "$dist\start_god_of_frames.bat"
+"@ | Set-Content -Encoding ASCII "$dist\Start God of Frames.bat"
 
 @"
 @echo off
@@ -58,127 +45,47 @@ god_of_frames.exe --remove-startup
 "@ | Set-Content -Encoding ASCII "$dist\remove_startup.bat"
 
 @"
-@echo off
-setlocal
-cd /d %~dp0
+God of Frames - User Guide
+==========================
 
-set "PY_CMD="
+### Step 1: Extract the Files
 
-python --version >nul 2>nul
-if "%ERRORLEVEL%"=="0" set "PY_CMD=python"
+Unzip this package to a permanent folder on your computer, like C:\Program Files\GodOfFrames or on your Desktop.
 
-if not defined PY_CMD (
-  py -3 --version >nul 2>nul
-  if "%ERRORLEVEL%"=="0" set "PY_CMD=py -3"
-)
+### Step 2: Start the Application
 
-if not defined PY_CMD if exist "%~dp0python.exe" set "PY_CMD=%~dp0python.exe"
-if not defined PY_CMD if exist "%~dp0python\python.exe" set "PY_CMD=%~dp0python\python.exe"
+Double-click the "Start God of Frames.bat" file to launch the app.
 
-if not defined PY_CMD (
-  for /f "delims=" %%P in ('dir /b /s "%LOCALAPPDATA%\Programs\Python\python.exe" 2^>nul') do (
-    set "PY_CMD=%%P"
-    goto :run_hub
-  )
-)
+- You will be asked for Administrator permission. Please click "Yes". This is required for the app to accurately monitor your game's FPS.
+- Your web browser will automatically open the control panel at http://127.0.0.1:5055.
 
-if not defined PY_CMD (
-  for /f "delims=" %%P in ('dir /b /s "%LOCALAPPDATA%\Temp\WinGet\python.exe" 2^>nul') do (
-    set "PY_CMD=%%P"
-    goto :run_hub
-  )
-)
+### Step 3: Add Your Games
 
-:run_hub
-if not defined PY_CMD (
-  echo Could not find a working Python 3 runtime.
-  echo Install Python 3 and run this script again.
-  pause
-  exit /b 1
-)
+In the web control panel, go to the "Settings" tab.
 
-echo Using Python: %PY_CMD%
-%PY_CMD% feedback_hub.py
-set "RC=%ERRORLEVEL%"
-if not "%RC%"=="0" (
-  echo Feedback hub exited with code %RC%.
-  pause
-)
-exit /b %RC%
-"@ | Set-Content -Encoding ASCII "$dist\run_feedback_hub.bat"
+Find the "Game Watch List" text box and enter the executable names of your games, separated by a semicolon. For example: `helldivers2.exe;cyberpunk2077.exe;eldenring.exe`
 
-@"
-@echo off
-setlocal
-cd /d %~dp0
+### Step 4: Play Your Game!
 
-set "PY_CMD="
+That's it! The frame optimization is now active.
 
-python --version >nul 2>nul
-if "%ERRORLEVEL%"=="0" set "PY_CMD=python"
+Just launch one of the games you added to the watch list. God of Frames will automatically detect it and work in the background to keep performance smooth. You can press F10 in-game to see the overlay.
 
-if not defined PY_CMD (
-  py -3 --version >nul 2>nul
-  if "%ERRORLEVEL%"=="0" set "PY_CMD=py -3"
-)
+### Optional: Start with Windows
 
-if not defined PY_CMD if exist "%~dp0python.exe" set "PY_CMD=%~dp0python.exe"
-if not defined PY_CMD if exist "%~dp0python\python.exe" set "PY_CMD=%~dp0python\python.exe"
+If you want God of Frames to run automatically when you log in, just run the `install_startup.bat` file. You can undo this at any time by running `remove_startup.bat`.
+"@ | Set-Content -Encoding ASCII "$dist\README.txt"
 
-if not defined PY_CMD (
-  for /f "delims=" %%P in ('dir /b /s "%LOCALAPPDATA%\Programs\Python\python.exe" 2^>nul') do (
-    set "PY_CMD=%%P"
-    goto :run_hub
-  )
-)
+Write-Host "[4/5] Creating release archive..."
+$manifestPath = "$dist\update_manifest.json"
+$version = "1.0.0" # Default version
+if (Test-Path $manifestPath) {
+    $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
+    if ($manifest.latest_version) {
+        $version = $manifest.latest_version
+    }
+}
+$zipFile = "dist\GodOfFrames-v$($version)-win64.zip"
+Compress-Archive -Path "$dist\*" -DestinationPath $zipFile -Force
 
-if not defined PY_CMD (
-  for /f "delims=" %%P in ('dir /b /s "%LOCALAPPDATA%\Temp\WinGet\python.exe" 2^>nul') do (
-    set "PY_CMD=%%P"
-    goto :run_hub
-  )
-)
-
-:run_hub
-if not defined PY_CMD (
-  echo Could not find a working Python 3 runtime.
-  echo Install Python 3 and run this script again.
-  pause
-  exit /b 1
-)
-
-echo Using Python: %PY_CMD%
-%PY_CMD% update_hub.py
-set "RC=%ERRORLEVEL%"
-if not "%RC%"=="0" (
-  echo Update hub exited with code %RC%.
-  pause
-)
-exit /b %RC%
-"@ | Set-Content -Encoding ASCII "$dist\run_update_hub.bat"
-
-@"
-God of Frames - Quick Start (No VS Code needed)
-
-1) Double-click start_god_of_frames.bat
-2) Allow Administrator prompt (recommended for accurate FPS)
-3) Website opens automatically at http://127.0.0.1:5055
-4) In website:
-   - Settings tab: choose protected apps and game watch list
-   - Feedback tab: send bug/feature reports
-5) Optional auto-start at login:
-   - run install_startup.bat
-
-For owner-only cross-user feedback collection:
-- Host feedback_hub.py on a server (python feedback_hub.py or run_feedback_hub.bat)
-- Set feedback_endpoint in settings.conf to:
-  http://YOUR_SERVER:8787/api/ingest
-
-Optional update-manifest server:
-- Run update_hub.py (python update_hub.py or run_update_hub.bat)
-- Edit update_manifest.json and publish the latest release URL/hash
-- Future clients can read: http://YOUR_SERVER:8790/api/version
-"@ | Set-Content -Encoding ASCII "$dist\README_USER.txt"
-
-Write-Host "[4/4] Done. Package folder: $dist"
-
+Write-Host "[5/5] Done. Package archive created at $zipFile"
