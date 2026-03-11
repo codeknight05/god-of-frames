@@ -68,6 +68,7 @@ src/
 scripts/
   package_release.ps1
   feedback_hub.py
+  update_hub.py
 
 settings.example.conf
 CMakeLists.txt
@@ -221,6 +222,8 @@ Package output folder:
 
 - `dist\GodOfFrames\`
 
+The release script now fails immediately if `cmake` configure/build fails. Use a fresh build directory or remove a stale one if you switch generators/platforms.
+
 Includes:
 
 - `god_of_frames.exe`
@@ -235,6 +238,11 @@ Includes:
 - `feedback_hub.py`
 - `update_hub.py`
 - `update_manifest.json`
+
+Notes:
+
+- `run_feedback_hub.bat` and `run_update_hub.bat` auto-detect Python 3.
+- If Python is missing or broken, those launchers stop with a clear warning instead of failing silently.
 
 ## Feedback Relay (Owner Side)
 
