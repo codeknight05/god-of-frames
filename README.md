@@ -4,6 +4,8 @@ God of Frames is a Windows C++ game performance watchdog that detects FPS drops,
 
 It is designed as a practical alternative to traditional monitoring tools: always-on watch mode, in-game style overlay, local control website, and policy-based remediation.
 
+Recent control-plane improvements borrow a few useful ideas from `eventstream`: bounded in-memory task queues, a small worker pool for request handling, and built-in health/stats endpoints.
+
 ## Key Features
 
 - Real-time telemetry for:
@@ -18,6 +20,7 @@ It is designed as a practical alternative to traditional monitoring tools: alway
 - Safe auto-fix engine with allow-listed actions only.
 - Learning loop that scores past actions and prioritizes what worked.
 - Built-in local control web UI (`http://127.0.0.1:5055`) to change runtime settings.
+- Async local control server with bounded request queue and worker pool.
 - Feedback tab with optional relay endpoint for cross-user product feedback.
 - Optional update-manifest URL setting for future auto-update checks.
 - In-game style overlay with hotkey cycle:
@@ -49,6 +52,7 @@ High-level runtime flow:
 7. `DashboardWriter` updates `data/dashboard.html`.
 8. `OverlayManager` renders overlay and severe-drop alerts.
 9. `ControlServer` serves UI/API and applies settings live.
+10. Worker-pool backed request handling keeps the control UI responsive when feedback forwarding or file I/O is slow.
 
 ## Project Structure
 
@@ -165,6 +169,8 @@ Features:
 API endpoints:
 
 - `GET /api/state`
+- `GET /api/health`
+- `GET /api/stats`
 - `POST /api/settings`
 - `GET /api/feedback`
 - `POST /api/feedback`

@@ -2,7 +2,10 @@
 
 #include "settings.h"
 #include "types.h"
+#include "worker_pool.h"
 
+#include <atomic>
+#include <chrono>
 #include <functional>
 #include <cstdint>
 #include <memory>
@@ -46,6 +49,8 @@ private:
     std::string BuildHtml() const;
     std::string BuildStateJson() const;
     std::string BuildFeedbackJson() const;
+    std::string BuildHealthJson() const;
+    std::string BuildStatsJson() const;
 
     static std::string ParsePath(const std::string& requestLine);
     static std::string UrlDecode(const std::string& s);
@@ -69,9 +74,16 @@ private:
     std::shared_ptr<WebUiState> state_;
     UpdateCallback onUpdate_;
     int port_ = 5055;
-    bool running_ = false;
+    std::atomic<bool> running_{false};
     void* threadHandle_ = nullptr;
     unsigned int threadId_ = 0;
     std::string feedbackPath_ = "data/feedback.log";
+    std::unique_ptr<WorkerPool> workerPool_;
+    std::chrono::steady_clock::time_point startedAt_{};
+    std::atomic<unsigned long long> totalRequests_{0};
+    std::atomic<unsigned long long> failedRequests_{0};
+    std::atomic<unsigned long long> droppedRequests_{0};
+    std::atomic<unsigned long long> activeRequests_{0};
+    std::atomic<unsigned long long> peakQueueDepth_{0};
 #endif
 };

@@ -9,6 +9,7 @@
 #include <process.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <cstdlib>
 #include <ctime>
@@ -16,6 +17,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <thread>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "winhttp.lib")
@@ -137,6 +139,15 @@ bool ControlServer::Start(int port, std::shared_ptr<WebUiState> state, UpdateCal
     port_ = port;
     state_ = std::move(state);
     onUpdate_ = std::move(onUpdate);
+    startedAt_ = std::chrono::steady_clock::now();
+    totalRequests_ = 0;
+    failedRequests_ = 0;
+    droppedRequests_ = 0;
+    activeRequests_ = 0;
+    peakQueueDepth_ = 0;
+    const unsigned int hw = std::thread::hardware_concurrency();
+    const size_t workerCount = std::max<size_t>(2, hw == 0 ? 4 : std::min<unsigned int>(hw, 4));
+    workerPool_ = std::make_unique<WorkerPool>(workerCount, 64);
     running_ = true;
 
     uintptr_t h = _beginthreadex(nullptr, 0,
@@ -163,6 +174,11 @@ void ControlServer::Stop() {
         WaitForSingleObject(hThread, 2000);
         CloseHandle(hThread);
         threadHandle_ = nullptr;
+    }
+
+    if (workerPool_) {
+        workerPool_->Stop();
+        workerPool_.reset();
     }
 }
 
@@ -350,6 +366,7 @@ bool ControlServer::SendHttp(uintptr_t clientSocket,
     std::string statusText = "OK";
     if (status == 400) statusText = "Bad Request";
     if (status == 404) statusText = "Not Found";
+    if (status == 503) statusText = "Service Unavailable";
     if (status == 500) statusText = "Internal Server Error";
 
     std::ostringstream oss;
@@ -436,6 +453,42 @@ std::string ControlServer::BuildFeedbackJson() const {
     return oss.str();
 }
 
+std::string ControlServer::BuildHealthJson() const {
+    const auto now = std::chrono::steady_clock::now();
+    const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startedAt_).count();
+    const auto queueDepth = workerPool_ ? workerPool_->QueueDepth() : 0;
+
+    std::ostringstream oss;
+    oss << "{";
+    oss << "\"status\":\"ok\",";
+    oss << "\"running\":" << (running_ ? "true" : "false") << ",";
+    oss << "\"uptimeSec\":" << uptime << ",";
+    oss << "\"queueDepth\":" << queueDepth << ",";
+    oss << "\"activeRequests\":" << activeRequests_.load();
+    oss << "}";
+    return oss.str();
+}
+
+std::string ControlServer::BuildStatsJson() const {
+    const auto now = std::chrono::steady_clock::now();
+    const auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startedAt_).count();
+    const auto queueDepth = workerPool_ ? workerPool_->QueueDepth() : 0;
+    const auto workerCount = workerPool_ ? workerPool_->WorkerCount() : 0;
+
+    std::ostringstream oss;
+    oss << "{";
+    oss << "\"uptimeSec\":" << uptime << ",";
+    oss << "\"workerCount\":" << workerCount << ",";
+    oss << "\"queueDepth\":" << queueDepth << ",";
+    oss << "\"peakQueueDepth\":" << peakQueueDepth_.load() << ",";
+    oss << "\"activeRequests\":" << activeRequests_.load() << ",";
+    oss << "\"totalRequests\":" << totalRequests_.load() << ",";
+    oss << "\"failedRequests\":" << failedRequests_.load() << ",";
+    oss << "\"droppedRequests\":" << droppedRequests_.load();
+    oss << "}";
+    return oss.str();
+}
+
 std::string ControlServer::BuildHtml() const {
     return R"HTML(
 <!doctype html>
@@ -481,6 +534,7 @@ std::string ControlServer::BuildHtml() const {
       <div class="card"><div class="k">CPU %</div><div id="cpu" class="v">--</div></div>
       <div class="card"><div class="k">System RAM %</div><div id="sysMem" class="v">--</div></div>
       <div class="card"><div class="k">Severity</div><div id="sev" class="v">--</div></div>
+      <div class="card"><div class="k">Server Queue</div><div id="queueDepth" class="v">0</div></div>
     </div>
 
     <div class="tabs">
@@ -504,6 +558,9 @@ std::string ControlServer::BuildHtml() const {
 
       <label>Update Manifest URL (optional, future auto-update checks)</label>
       <input id="updateManifestUrl" placeholder="https://your-server.example.com/api/version" />
+
+      <div class="k" style="margin-top:14px">Control Server Runtime</div>
+      <div id="serverStats" class="sub">Loading server stats...</div>
 
       <button class="btn" onclick="saveSettings()">Save Settings</button>
       <div id="saveStatus" class="sub"></div>
@@ -577,6 +634,16 @@ std::string ControlServer::BuildHtml() const {
         if(!document.getElementById('updateManifestUrl').dataset.touched){
           document.getElementById('updateManifestUrl').value = s.updateManifestUrl || '';
         }
+      }catch(e){}
+    }
+
+    async function refreshServerStats(){
+      try{
+        const r = await fetch('/api/stats');
+        const s = await r.json();
+        document.getElementById('queueDepth').textContent = String(s.queueDepth ?? 0);
+        document.getElementById('serverStats').textContent =
+          `Workers: ${s.workerCount ?? 0} | Active: ${s.activeRequests ?? 0} | Total: ${s.totalRequests ?? 0} | Dropped: ${s.droppedRequests ?? 0} | Uptime: ${s.uptimeSec ?? 0}s`;
       }catch(e){}
     }
 
@@ -675,8 +742,10 @@ std::string ControlServer::BuildHtml() const {
 
     setInterval(refreshState, 1000);
     setInterval(refreshFeedback, 10000);
+    setInterval(refreshServerStats, 2000);
     refreshState();
     refreshFeedback();
+    refreshServerStats();
   </script>
 </body>
 </html>
@@ -739,6 +808,12 @@ bool ControlServer::HandleClient(uintptr_t clientSocket) {
     }
     if (method == "GET" && path == "/api/state") {
         return SendHttp(clientSocket, 200, "application/json", BuildStateJson());
+    }
+    if (method == "GET" && path == "/api/health") {
+        return SendHttp(clientSocket, 200, "application/json", BuildHealthJson());
+    }
+    if (method == "GET" && path == "/api/stats") {
+        return SendHttp(clientSocket, 200, "application/json", BuildStatsJson());
     }
     if (method == "GET" && path == "/api/feedback") {
         return SendHttp(clientSocket, 200, "application/json", BuildFeedbackJson());
@@ -863,9 +938,37 @@ void ControlServer::ThreadMain() {
             continue;
         }
 
-        HandleClient(static_cast<uintptr_t>(client));
-        shutdown(client, SD_BOTH);
-        closesocket(client);
+        const auto clientSocket = static_cast<uintptr_t>(client);
+        if (!workerPool_) {
+            shutdown(client, SD_BOTH);
+            closesocket(client);
+            continue;
+        }
+
+        const auto queueDepth = workerPool_->QueueDepth();
+        auto peak = peakQueueDepth_.load();
+        while (queueDepth > peak && !peakQueueDepth_.compare_exchange_weak(peak, queueDepth)) {}
+
+        const bool queued = workerPool_->Enqueue([this, clientSocket, client]() {
+            totalRequests_.fetch_add(1);
+            activeRequests_.fetch_add(1);
+
+            const bool ok = HandleClient(clientSocket);
+            if (!ok) {
+                failedRequests_.fetch_add(1);
+            }
+
+            shutdown(client, SD_BOTH);
+            closesocket(client);
+            activeRequests_.fetch_sub(1);
+        });
+
+        if (!queued) {
+            droppedRequests_.fetch_add(1);
+            SendHttp(clientSocket, 503, "text/plain", "Server busy");
+            shutdown(client, SD_BOTH);
+            closesocket(client);
+        }
     }
 
     shutdown(listenSock, SD_BOTH);
